@@ -92,7 +92,7 @@ function Icon({ name, className = 'h-5 w-5' }: IconProps) {
 // ==========================================
 // 2. COMPONENT: Sidebar
 // ==========================================
-function Sidebar({ role, page }: { role: 'Admin' | 'User'; page: 'home' | 'history' }) {
+function Sidebar({ role, page, isOpen, onClose }: { role: 'Admin' | 'User'; page: 'home' | 'history'; isOpen: boolean; onClose: () => void }) {
   const router = useRouter();
   const isAdmin = role === 'Admin';
   const navItems = isAdmin 
@@ -103,42 +103,53 @@ function Sidebar({ role, page }: { role: 'Admin' | 'User'; page: 'home' | 'histo
     : [{ label: 'Home', href: '/user', icon: 'home' as const, active: true }];
 
   return (
-    <aside className="flex w-full shrink-0 flex-col border-b border-[#e5e5e5] bg-white p-4 lg:min-h-screen lg:w-[220px] lg:border-b-0 lg:border-r lg:px-4 lg:py-8">
-      <h1 className="px-3 text-lg font-bold text-gray-800 lg:mb-6">{role} Dashboard</h1>
-      
-      <nav className="mt-2 flex gap-1 lg:mt-0 lg:flex-col lg:gap-1.5">
-        {navItems.map(({ label, href, icon, active }) => (
-          <Link 
-            key={href} 
-            href={href} 
-            className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition ${active ? 'bg-[#e7f4fa] text-[#248ee0]' : 'text-gray-600 hover:bg-gray-50'}`}
-          >
-            <Icon name={icon} className="h-4 w-4" />
-            {label}
+    <>
+      {isOpen && (
+        <div className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={onClose} />
+      )}
+      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[260px] shrink-0 flex-col border-b border-[#e5e5e5] bg-white p-4 transition-transform lg:static lg:z-0 lg:inline lg:w-[220px] lg:border-b-0 lg:border-r lg:px-4 lg:py-8 ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className="flex items-center justify-between px-3">
+          <h1 className="text-lg font-bold text-gray-800 lg:mb-6">{role} Dashboard</h1>
+          <button onClick={onClose} className="lg:hidden text-gray-500 hover:text-gray-700">
+            <Icon name="x" className="h-5 w-5" />
+          </button>
+        </div>
+        
+        <nav className="mt-2 flex flex-col gap-1 lg:mt-0 lg:gap-1.5">
+          {navItems.map(({ label, href, icon, active }) => (
+            <Link 
+              key={href} 
+              href={href} 
+              onClick={onClose}
+              className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition ${active ? 'bg-[#e7f4fa] text-[#248ee0]' : 'text-gray-600 hover:bg-gray-50'}`}
+            >
+              <Icon name={icon} className="h-4 w-4" />
+              {label}
+            </Link>
+          ))}
+          <Link href={isAdmin ? '/user' : '/admin'} onClick={onClose} className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">
+            <Icon name="switch" className="h-4 w-4" />
+            {isAdmin ? 'Switch to user' : 'Switch to Admin'}
           </Link>
-        ))}
-        <Link href={isAdmin ? '/user' : '/admin'} className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">
-          <Icon name="switch" className="h-4 w-4" />
-          {isAdmin ? 'Switch to user' : 'Switch to Admin'}
-        </Link>
-      </nav>
-      
-      <div className="mt-auto flex gap-1 lg:flex-col lg:gap-1.5">
-        <button 
-          onClick={async () => {
-            await fetch('/api/logout', { method: 'POST' });
-            deleteCookie('token');
-            deleteCookie('role');
-            router.push('/');
-            router.refresh();
-          }}
-          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
-        >
-          <Icon name="logout" className="h-4 w-4" />
-          Logout
-        </button>
-      </div>
-    </aside>
+        </nav>
+        
+        <div className="mt-auto flex flex-col gap-1.5">
+          <button 
+            onClick={async () => {
+              await fetch('/api/logout', { method: 'POST' });
+              deleteCookie('token');
+              deleteCookie('role');
+              router.push('/');
+              router.refresh();
+            }}
+            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
+          >
+            <Icon name="logout" className="h-4 w-4" />
+            Logout
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }
 
@@ -251,6 +262,7 @@ export function UserHome() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
   const [toastError, setToastError] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
   const token = getCookie('token');
 
   useEffect(() => {
@@ -284,8 +296,12 @@ export function UserHome() {
 
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
-      <Sidebar role="User" page="home"/>
+      <Sidebar role="User" page="home" isOpen={menuOpen} onClose={() => setMenuOpen(false)}/>
       <main className="flex-1 space-y-4 bg-[#fafafa] p-4 lg:p-6">
+        <button onClick={() => setMenuOpen(true)} className="lg:hidden flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm text-gray-600 shadow-sm border border-gray-200 hover:bg-gray-50">
+          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12h16M4 6h16M4 18h16"/></svg>
+          Menu
+        </button>
         {toast && <Toast text={toast} close={() => setToast('')}/>}
         {toastError && <ToastError text={toastError} close={() => setToastError('')}/>}
         {loading ? (
@@ -314,6 +330,7 @@ export function AdminHistory() {
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [toastError, setToastError] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
   const token = getCookie('token');
 
   useEffect(() => {
@@ -326,13 +343,17 @@ export function AdminHistory() {
 
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
-      <Sidebar role="Admin" page="history"/>
+      <Sidebar role="Admin" page="history" isOpen={menuOpen} onClose={() => setMenuOpen(false)}/>
       <main className="flex-1 bg-[#fafafa] p-4 lg:p-6">
+        <button onClick={() => setMenuOpen(true)} className="lg:hidden flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm text-gray-600 shadow-sm border border-gray-200 hover:bg-gray-50 mb-4">
+          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12h16M4 6h16M4 18h16"/></svg>
+          Menu
+        </button>
         {toastError && <ToastError text={toastError} close={() => setToastError('')}/>}
         {loading ? (
           <p className="text-center text-gray-500">Loading...</p>
-        ) : (
-          <div className="overflow-hidden rounded-md border border-gray-200 bg-white shadow-sm">
+        )         : (
+          <div className="overflow-x-auto rounded-md border border-gray-200 bg-white shadow-sm">
             <table className="w-full min-w-[600px] border-collapse text-left text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
@@ -368,6 +389,7 @@ export function AdminHome() {
   const [concerts, setConcerts] = useState<any[]>([]);
   const [metrics, setMetrics] = useState({ totalSeats: '0', reserved: '0', cancelled: '0' });
   const [loading, setLoading] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
   const token = getCookie('token');
 
   useEffect(() => {
@@ -423,11 +445,15 @@ export function AdminHome() {
 
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
-      <Sidebar role="Admin" page="home"/>
+      <Sidebar role="Admin" page="home" isOpen={menuOpen} onClose={() => setMenuOpen(false)}/>
       {toast && <Toast text={toast} close={() => setToast('')}/>}
       {toastError && <ToastError text={toastError} close={() => setToastError('')}/>}
       
       <main className="flex-1 bg-[#fafafa] p-4 lg:p-6">
+        <button onClick={() => setMenuOpen(true)} className="lg:hidden flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm text-gray-600 shadow-sm border border-gray-200 hover:bg-gray-50 mb-4">
+          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12h16M4 6h16M4 18h16"/></svg>
+          Menu
+        </button>
         <div className="grid gap-4 grid-cols-3">
           <Metric title="Total of seats" number={metrics.totalSeats} tone="bg-[#0878ae]" icon="user"/>
           <Metric title="Reserve" number={metrics.reserved} tone="bg-[#06ab8e]" icon="award"/>
