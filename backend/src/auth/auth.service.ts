@@ -25,7 +25,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    if(user.role !== (role as string)) {
+    if(user.role !== (role as string).toUpperCase()) {
       throw new ForbiddenException('Access denied. You do not have permission to access this page');
     }
 
