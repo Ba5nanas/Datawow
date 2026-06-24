@@ -166,6 +166,7 @@ function ConcertCard({ id, title, seats, totalSeats, admin, onDelete, onReserve,
   onReserve?: () => void; 
   onCancel?: () => void; 
   isReserved?: boolean; 
+  token?: string; 
 }) {
   const [reserved, setReserved] = useState(isReserved);
 
