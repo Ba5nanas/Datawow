@@ -20,8 +20,10 @@ describe('ConcertService', () => {
     updatedAt: new Date(),
   };
 
-  const mockReservation: Partial<ConcertReservationEntity> = {
+  const mockReservation: ConcertReservationEntity = {
     id: 'reservation-1',
+    concert: mockConcert,
+    user: { id: 'user-1', fullName: 'Test User', email: 'test@example.com', password: 'hashed', role: 'USER' } as any,
     concertId: 'concert-1',
     userId: 'user-1',
     action: ReservationAction.reserve,
@@ -40,7 +42,7 @@ describe('ConcertService', () => {
     reservationRepository = {
       findOne: jest.fn(),
       create: jest.fn((data: any) => ({ ...data })),
-      save: jest.fn((entity: any) => Promise.resolve(entity)),
+      save: jest.fn((entity: any) => Promise.resolve({ ...entity, id: 'reservation-1', createdAt: new Date() })),
       createQueryBuilder: jest.fn(() => {
         const builder: any = {};
         builder.leftJoinAndSelect = jest.fn().mockImplementation(() => builder);
@@ -54,8 +56,14 @@ describe('ConcertService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ConcertService,
-        { provide: 'CONCERT_REPOSITORY', useValue: concertRepository },
-        { provide: 'CONCERT_RESERVATION_REPOSITORY', useValue: reservationRepository },
+        {
+          provide: 'ConcertEntityRepository',
+          useValue: concertRepository,
+        },
+        {
+          provide: 'ConcertReservationEntityRepository',
+          useValue: reservationRepository,
+        },
       ],
     }).compile();
 
@@ -264,8 +272,8 @@ describe('ConcertService', () => {
     it('USER can cancel an existing reservation', async () => {
       concertRepository.findOne.mockResolvedValue({ ...mockConcert, availableSeats: 5 });
       reservationRepository.findOne.mockResolvedValue(mockReservation);
-      reservationRepository.create.mockReturnValue(mockReservation);
-      reservationRepository.save.mockResolvedValue(mockReservation);
+      reservationRepository.create.mockImplementation((data: any) => ({ ...data }));
+      reservationRepository.save.mockResolvedValue({ id: 'reservation-1', action: ReservationAction.cancel, createdAt: new Date() });
       concertRepository.save.mockResolvedValue(mockConcert);
 
       const result = await service.cancel('concert-1', 'user-1');
@@ -276,8 +284,8 @@ describe('ConcertService', () => {
     it('Canceling reservation increases availableSeats by 1', async () => {
       concertRepository.findOne.mockResolvedValue({ ...mockConcert, availableSeats: 5 });
       reservationRepository.findOne.mockResolvedValue(mockReservation);
-      reservationRepository.create.mockReturnValue(mockReservation);
-      reservationRepository.save.mockResolvedValue(mockReservation);
+      reservationRepository.create.mockImplementation((data: any) => ({ ...data }));
+      reservationRepository.save.mockResolvedValue({ id: 'reservation-1', action: ReservationAction.cancel, createdAt: new Date() });
       concertRepository.save.mockResolvedValue(mockConcert);
 
       await service.cancel('concert-1', 'user-1');
@@ -303,7 +311,7 @@ describe('ConcertService', () => {
     });
 
     it('Canceling an already cancelled reservation should fail', async () => {
-      concertRepository.findOne.mockResolvedValue({ ...mockConcert, availableSeats: 5 });
+      concertRepository.findOne.mockResolvedValue(mockConcert);
       reservationRepository.findOne.mockResolvedValue(null);
 
       await expect(service.cancel('concert-1', 'user-1')).rejects.toThrow(BadRequestException);

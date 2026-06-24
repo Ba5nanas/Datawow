@@ -6,6 +6,11 @@ import { RegisterDto } from '../user/dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { Role } from '../common/enums/role.enum';
 
+jest.mock('bcrypt', () => ({
+  compare: jest.fn().mockResolvedValue(true),
+  hash: jest.fn().mockResolvedValue('hashedPassword123'),
+}));
+
 describe('AuthService', () => {
   let service: AuthService;
   let userService: any;
@@ -60,7 +65,16 @@ describe('AuthService', () => {
         role: Role.ADMIN,
       };
 
-      userService.register.mockResolvedValue(mockRegisteredUser);
+      const registeredUser = {
+        id: 'admin-user-id',
+        fullName: 'Admin User',
+        email: 'admin@example.com',
+        role: Role.ADMIN,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      userService.register.mockResolvedValue(registeredUser);
 
       const result = await service.register(registerDto);
 
@@ -78,9 +92,12 @@ describe('AuthService', () => {
       };
 
       const registeredUser = {
-        ...mockRegisteredUser,
+        id: 'test-user-id-2',
+        fullName: 'Regular User',
         email: 'user@example.com',
         role: Role.USER,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       };
 
       userService.register.mockResolvedValue(registeredUser);
@@ -128,7 +145,7 @@ describe('AuthService', () => {
     });
 
     it('should login USER successfully', async () => {
-      const user: any = { ...mockUser, email: 'user@example.com', role: Role.USER };
+      const user: any = { ...mockUser, email: 'user@example.com', role: Role.USER, password: 'hashedPassword123' };
       const loginDto: LoginDto = {
         email: 'user@example.com',
         password: 'password123',
@@ -155,6 +172,7 @@ describe('AuthService', () => {
       };
 
       userService.findByEmail.mockResolvedValue(mockUser);
+      jest.requireMock('bcrypt').compare.mockResolvedValue(false);
 
       await expect(service.login(loginDto)).rejects.toThrow('Invalid credentials');
     });
@@ -171,6 +189,8 @@ describe('AuthService', () => {
     });
 
     it('JWT payload must include sub, email, and role', async () => {
+      jest.clearAllMocks();
+      jest.requireMock('bcrypt').compare.mockResolvedValue(true);
       const loginDto: LoginDto = {
         email: 'test@example.com',
         password: 'password123',

@@ -19,8 +19,10 @@ describe('ConcertService - Reservation Edge Cases', () => {
     updatedAt: new Date(),
   };
 
-  const mockReservation: Partial<ConcertReservationEntity> = {
+  const mockReservation: ConcertReservationEntity = {
     id: 'reservation-1',
+    concert: mockConcert,
+    user: { id: 'user-1', fullName: 'Test User', email: 'test@example.com', password: 'hashed', role: 'USER' } as any,
     concertId: 'concert-1',
     userId: 'user-1',
     action: ReservationAction.reserve,
@@ -53,8 +55,14 @@ describe('ConcertService - Reservation Edge Cases', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ConcertService,
-        { provide: 'CONCERT_REPOSITORY', useValue: concertRepository },
-        { provide: 'CONCERT_RESERVATION_REPOSITORY', useValue: reservationRepository },
+        {
+          provide: 'ConcertEntityRepository',
+          useValue: concertRepository,
+        },
+        {
+          provide: 'ConcertReservationEntityRepository',
+          useValue: reservationRepository,
+        },
       ],
     }).compile();
 
