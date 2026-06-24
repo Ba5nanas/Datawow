@@ -398,8 +398,8 @@ export function AdminHome() {
     fetchConcerts(token)
       .then(data => {
         setConcerts(data);
-        const totalSeats = data.reduce((sum: number, c) => sum + (c.totalSeats || 0), 0);
-        const reserved = data.reduce((sum: number, c) => sum + (c.reservedSeats || 0), 0);
+        const totalSeats = data.reduce((sum: number, c: any) => sum + (c.totalSeats || 0), 0);
+        const reserved = data.reduce((sum: number, c: any) => sum + (c.reservedSeats || 0), 0);
         setMetrics({ totalSeats: String(totalSeats), reserved: String(reserved), cancelled: '0' });
       })
       .catch((err: any) => setToastError(err.message || 'Failed to load'))
@@ -419,8 +419,8 @@ export function AdminHome() {
       setTab('overview');
       const updated = await fetchConcerts(token);
       setConcerts(updated);
-      const totalSeatsSum = updated.reduce((sum: number, c) => sum + (c.totalSeats || 0), 0);
-      const reservedSum = updated.reduce((sum: number, c) => sum + (c.reservedSeats || 0), 0);
+      const totalSeatsSum = updated.reduce((sum: number, c: any) => sum + (c.totalSeats || 0), 0);
+      const reservedSum = updated.reduce((sum: number, c: any) => sum + (c.reservedSeats || 0), 0);
       setMetrics({ totalSeats: String(totalSeatsSum), reserved: String(reservedSum), cancelled: '0' });
     } catch (err: any) {
       setToastError(err.message || 'Create failed');
@@ -436,8 +436,8 @@ export function AdminHome() {
       setDeleteId(null);
       const updated = await fetchConcerts(token);
       setConcerts(updated);
-      const totalSeatsSum = updated.reduce((sum: number, c) => sum + (c.totalSeats || 0), 0);
-      const reservedSum = updated.reduce((sum: number, c) => sum + (c.reservedSeats || 0), 0);
+      const totalSeatsSum = updated.reduce((sum: number, c: any) => sum + (c.totalSeats || 0), 0);
+      const reservedSum = updated.reduce((sum: number, c: any) => sum + (c.reservedSeats || 0), 0);
       setMetrics({ totalSeats: String(totalSeatsSum), reserved: String(reservedSum), cancelled: '0' });
     } catch (err: any) {
       setToastError(err.message || 'Delete failed');
