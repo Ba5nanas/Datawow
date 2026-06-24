@@ -38,10 +38,13 @@ services:
       - "5001:3001"
     volumes:
       - ./landingpage/app:/app/app
+      - ./landingpage/components:/app/components
       - ./landingpage/public:/app/public
       - ./landingpage/package.json:/app/package.json
       - ./landingpage/tsconfig.json:/app/tsconfig.json
-      - ./landingpage/next.config.ts:/app/next.config.ts
+      - ./landingpage/next.config.js:/app/next.config.js
+      - ./landingpage/postcss.config.js:/app/postcss.config.js
+      - ./landingpage/tailwind.config.js:/app/tailwind.config.js
       - landingpage-node-modules:/app/node_modules
     environment:
       - NODE_ENV=development
