@@ -23,7 +23,6 @@ async function apiFetch(endpoint: string, options: RequestInit, token: string) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(options.headers as Record<string, string>) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${LANDINGPAGE_URL}/api/concert${endpoint}`, { ...options, headers });
-  console.log("res : ", res);
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
     const message = error.error || error.message || `Request failed (${res.status})`;
@@ -35,10 +34,6 @@ async function apiFetch(endpoint: string, options: RequestInit, token: string) {
 
 async function fetchConcerts(token: string) {
   return apiFetch('', { method: 'GET' }, token);
-}
-
-async function fetchConcertById(id: string, token: string) {
-  return apiFetch(`/${id}`, { method: 'GET' }, token);
 }
 
 async function createConcert(token: string, data: { name: string; totalSeats: number; description?: string }) {
