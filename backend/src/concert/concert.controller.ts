@@ -23,8 +23,15 @@ export class ConcertController {
   constructor(private readonly concertService: ConcertService) {}
 
   @Get()
-  async findAll() {
-    return this.concertService.findAll();
+  @UseGuards(JwtAuthGuard)
+  async findAll(@Request() req: any) {
+    return this.concertService.findAll(req.user.userId);
+  }
+
+  @Get('history')
+  @Roles(Role.ADMIN)
+  async getHistory() {
+    return this.concertService.getHistory();
   }
 
   @Get(':id')
@@ -59,11 +66,5 @@ export class ConcertController {
   @HttpCode(HttpStatus.OK)
   async cancel(@Param('id') id: string, @Request() req: any) {
     return this.concertService.cancel(id, req.user.userId);
-  }
-
-  @Get('history')
-  @Roles(Role.ADMIN)
-  async getHistory() {
-    return this.concertService.getHistory();
   }
 }

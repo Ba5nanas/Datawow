@@ -8,6 +8,7 @@ import { ConcertModule } from './concert/concert.module';
 import { UserEntity } from './common/entities/user.entity';
 import { ConcertEntity } from './common/entities/concert.entity';
 import { ConcertReservationEntity } from './common/entities/concert-reservation.entity';
+import { ConcertHistoryEntity } from './common/entities/concert-history.entity';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { ConcertReservationEntity } from './common/entities/concert-reservation.
       username: process.env.DB_USERNAME || 'postgres',
       password: process.env.DB_PASSWORD || 'postgres',
       database: process.env.DB_DATABASE || 'backend',
-      entities: [UserEntity, ConcertEntity, ConcertReservationEntity],
+       entities: [UserEntity, ConcertEntity, ConcertReservationEntity, ConcertHistoryEntity],
       synchronize: true,
     }),
     AuthModule,

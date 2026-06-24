@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConcertEntity } from '../common/entities/concert.entity';
 import { ConcertReservationEntity, ReservationAction } from '../common/entities/concert-reservation.entity';
+import { ConcertHistoryEntity, HistoryAction } from '../common/entities/concert-history.entity';
 import { CreateConcertDto } from './dto/create-concert.dto';
 
 @Injectable()
@@ -12,10 +13,39 @@ export class ConcertService {
     private readonly concertRepository: Repository<ConcertEntity>,
     @InjectRepository(ConcertReservationEntity)
     private readonly reservationRepository: Repository<ConcertReservationEntity>,
+    @InjectRepository(ConcertHistoryEntity)
+    private readonly historyRepository: Repository<ConcertHistoryEntity>,
   ) {}
 
-  async findAll(): Promise<ConcertEntity[]> {
-    return this.concertRepository.find({ order: { createdAt: 'DESC' } });
+  async findAll(userId?: string): Promise<any[]> {
+    const concerts = await this.concertRepository.find({ order: { createdAt: 'DESC' } });
+    
+    if (!userId) return concerts;
+    
+    const reservations = await this.reservationRepository.find({
+      where: { userId, action: ReservationAction.reserve },
+    });
+    
+    const reservedConcertIds = reservations.map(r => r.concertId);
+    
+    const reservedCounts = await this.reservationRepository
+      .createQueryBuilder('r')
+      .select('r.concertId', 'concertId')
+      .addSelect('COUNT(*)', 'count')
+      .where('r.action = :action', { action: ReservationAction.reserve })
+      .groupBy('r.concertId')
+      .getRawMany();
+    
+    const reservedMap: Record<string, number> = {};
+    reservedCounts.forEach(r => {
+      reservedMap[r.concertId] = parseInt(r.count);
+    });
+    
+    return concerts.map(concert => ({
+      ...concert,
+      reservedSeats: reservedMap[concert.id] || 0,
+      userReservationStatus: reservedConcertIds.includes(concert.id) ? 'reserved' : null,
+    }));
   }
 
   async findOne(id: string): Promise<ConcertEntity | null> {
@@ -47,7 +77,11 @@ export class ConcertService {
       throw new NotFoundException('Concert not found');
     }
 
-    if (concert.availableSeats <= 0) {
+    const reservedCount = await this.reservationRepository.count({
+      where: { concertId: id, action: ReservationAction.reserve },
+    });
+
+    if (reservedCount >= concert.totalSeats) {
       throw new BadRequestException('Concert is fully booked');
     }
 
@@ -59,16 +93,23 @@ export class ConcertService {
       throw new BadRequestException('Already reserved this concert');
     }
 
-    concert.availableSeats -= 1;
-    await this.concertRepository.save(concert);
-
     const reservation = this.reservationRepository.create({
       concertId: concert.id,
       userId,
       action: ReservationAction.reserve,
     });
 
-    return this.reservationRepository.save(reservation);
+    await this.reservationRepository.save(reservation);
+
+    const history = this.historyRepository.create({
+      concertId: concert.id,
+      userId,
+      action: HistoryAction.reserve,
+    });
+
+    await this.historyRepository.save(history);
+
+    return reservation;
   }
 
   async cancel(id: string, userId: string): Promise<ConcertReservationEntity> {
@@ -86,30 +127,38 @@ export class ConcertService {
       throw new BadRequestException('No reservation found');
     }
 
-    concert.availableSeats += 1;
-    await this.concertRepository.save(concert);
+    await this.reservationRepository.delete(reservation.id);
 
-    const cancelRecord = this.reservationRepository.create({
+    const history = this.historyRepository.create({
       concertId: concert.id,
       userId,
-      action: ReservationAction.cancel,
+      action: HistoryAction.cancel,
     });
 
-    return this.reservationRepository.save(cancelRecord);
+    await this.historyRepository.save(history);
+
+    return reservation;
   }
 
   async getHistory(): Promise<any[]> {
-    return this.reservationRepository
-      .createQueryBuilder('reservation')
-      .leftJoinAndSelect('reservation.user', 'user')
-      .leftJoinAndSelect('reservation.concert', 'concert')
+    const raw = await this.historyRepository
+      .createQueryBuilder('h')
+      .leftJoinAndSelect('h.user', 'user')
+      .leftJoinAndSelect('h.concert', 'concert')
       .select([
-        'reservation.createdAt AS dateTime',
-        'user.fullName AS username',
-        'concert.name AS concertName',
-        'reservation.action AS action',
+        'h.createdAt AS "dateTime"',
+        'user.fullName AS "username"',
+        'concert.name AS "concertName"',
+        'h.action AS "action"',
       ])
-      .orderBy('reservation.createdAt', 'DESC')
+      .orderBy('h.createdAt', 'DESC')
       .getRawMany();
+
+    return raw.map(row => ({
+      dateTime: row.dateTime,
+      username: row.username,
+      concertName: row.concertName,
+      action: row.action,
+    }));
   }
 }
