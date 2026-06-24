@@ -100,8 +100,8 @@ export default function AccessPage() {
 
         {/* Grid: ลด max-w และลดความห่างระหว่างสองการ์ด (gap-36 -> gap-10) */}
         <div className="mx-auto mt-10 grid max-w-[900px] gap-6 sm:grid-cols-2 md:mt-16 md:gap-10">
-          <AccessCard title="User" admin={false} href="/admin/login" />
-          <AccessCard title="Administrator" admin={true} href="/user/login" />
+          <AccessCard title="User" admin={false} href="/user/login" />
+          <AccessCard title="Administrator" admin={true} href="/admin/login" />
         </div>
       </section>
     </main>

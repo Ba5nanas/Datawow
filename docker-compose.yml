@@ -49,6 +49,7 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3001
+      - BACKEND_URL=http://backend:3000
     depends_on:
       - backend
     networks:

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable , ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserEntity } from '../common/entities/user.entity';
@@ -17,7 +17,7 @@ export class UserService {
 
     const existingUser = await this.userRepository.findOne({ where: { email } });
     if (existingUser) {
-      throw new Error('Email already registered');
+      throw new ConflictException('Email already registered');
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);

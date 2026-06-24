@@ -18,4 +18,11 @@ export class AuthController {
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
   }
+
+  @Post('verify')
+  @HttpCode(HttpStatus.OK)
+  async verify(@Body() body: { token: string }) {
+    const isValid = await this.authService.verify(body.token);
+    return { valid: isValid };
+  }
 }

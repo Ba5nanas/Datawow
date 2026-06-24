@@ -1,12 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { deleteCookie } from '../utils/cookie';
 
 const COPY_TEXT = 'Lorem ipsum dolor sit amet consectetur. Elit purus nam gravida porttitor nibh urna sit ornare a. Proin dolor morbi id ornare aenean non. Fusce dignissim turpis sed non est orci sed in.';
 
 // ==========================================
-// 1. COMPONENT: Icon (ปรับโครงสร้างให้อ่านง่าย)
+// 1. COMPONENT: Icon
 // ==========================================
 interface IconProps {
   name: 'home' | 'history' | 'switch' | 'logout' | 'user' | 'award' | 'x' | 'trash' | 'save' | 'check';
@@ -39,9 +41,10 @@ function Icon({ name, className = 'h-5 w-5' }: IconProps) {
 }
 
 // ==========================================
-// 2. COMPONENT: Sidebar (ปรับ Padding / ขนาดฟอนต์)
+// 2. COMPONENT: Sidebar (ปรับเมนูลิงก์เป็น rounded-md)
 // ==========================================
 function Sidebar({ role, page }: { role: 'Admin' | 'User'; page: 'home' | 'history' }) {
+  const router = useRouter();
   const isAdmin = role === 'Admin';
   const navItems = isAdmin 
     ? [
@@ -59,13 +62,13 @@ function Sidebar({ role, page }: { role: 'Admin' | 'User'; page: 'home' | 'histo
           <Link 
             key={href} 
             href={href} 
-            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${active ? 'bg-[#e7f4fa] text-[#248ee0]' : 'text-gray-600 hover:bg-gray-50'}`}
+            className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition ${active ? 'bg-[#e7f4fa] text-[#248ee0]' : 'text-gray-600 hover:bg-gray-50'}`}
           >
             <Icon name={icon} className="h-4 w-4" />
             {label}
           </Link>
         ))}
-        <Link href={isAdmin ? '/user' : '/admin'} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">
+        <Link href={isAdmin ? '/user' : '/admin'} className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">
           <Icon name="switch" className="h-4 w-4" />
           {isAdmin ? 'Switch to user' : 'Switch to Admin'}
         </Link>
@@ -73,23 +76,32 @@ function Sidebar({ role, page }: { role: 'Admin' | 'User'; page: 'home' | 'histo
       
       <div className="mt-auto flex gap-1 lg:flex-col lg:gap-1.5">
         
-        <Link href="/login" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-50">
+        <button 
+          onClick={async () => {
+            await fetch('/api/logout', { method: 'POST' });
+            deleteCookie('token');
+            deleteCookie('role');
+            router.push('/');
+            router.refresh();
+          }}
+          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
+        >
           <Icon name="logout" className="h-4 w-4" />
           Logout
-        </Link>
+        </button>
       </div>
     </aside>
   );
 }
 
 // ==========================================
-// 3. COMPONENT: ConcertCard (ลดขนาดกล่อง, ฟอนต์ และปุ่ม)
+// 3. COMPONENT: ConcertCard (เปลี่ยนเป็น rounded-md)
 // ==========================================
 function ConcertCard({ title, seats, admin, onDelete, cancelled = false }: { title: string; seats: number; admin?: boolean; onDelete?: () => void; cancelled?: boolean }) {
   const [isCancelled, setCancelled] = useState(cancelled);
   
   return (
-    <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+    <article className="rounded-md border border-gray-200 bg-white p-5 shadow-sm">
       <h2 className="text-lg font-bold text-[#248ee0]">{title}</h2>
       <div className="my-3 border-t border-gray-100" />
       <p className="text-xs leading-relaxed text-gray-600 sm:text-sm">{COPY_TEXT}</p>
@@ -101,14 +113,14 @@ function ConcertCard({ title, seats, admin, onDelete, cancelled = false }: { tit
         </div>
         
         {admin ? (
-          <button onClick={onDelete} className="flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#ed4d4f] px-4 text-xs font-semibold text-white transition hover:bg-red-600">
+          <button onClick={onDelete} className="flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#ed4d4f] px-4 text-xs font-semibold text-white transition hover:bg-red-600">
             <Icon name="trash" className="h-3.5 w-3.5" />
             Delete
           </button>
         ) : (
           <button 
             onClick={() => setCancelled(!isCancelled)} 
-            className={`h-9 min-w-[120px] rounded-lg px-4 text-xs font-semibold text-white transition ${isCancelled ? 'bg-gray-400 hover:bg-gray-500' : 'bg-[#248ee0] hover:bg-[#147bc9]'}`}
+            className={`h-9 min-w-[120px] rounded-md px-4 text-xs font-semibold text-white transition ${isCancelled ? 'bg-gray-400 hover:bg-gray-500' : 'bg-[#248ee0] hover:bg-[#147bc9]'}`}
           >
             {isCancelled ? 'Cancel' : 'Reserve'}
           </button>
@@ -119,11 +131,11 @@ function ConcertCard({ title, seats, admin, onDelete, cancelled = false }: { tit
 }
 
 // ==========================================
-// 4. COMPONENT: Metric (ลดความสูงและขนาดตัวเลข)
+// 4. COMPONENT: Metric (เปลี่ยนเป็น rounded-md)
 // ==========================================
 function Metric({ title, number, tone, icon }: { title: string; number: string; tone: string; icon: 'user' | 'award' | 'x' }) { 
   return (
-    <div className={`flex min-h-[100px] flex-col items-center justify-center rounded-xl p-4 text-white shadow-sm ${tone}`}>
+    <div className={`flex min-h-[100px] flex-col items-center justify-center rounded-md p-4 text-white shadow-sm ${tone}`}>
       <Icon name={icon} className="h-6 w-6 opacity-90"/>
       <span className="mt-1.5 text-xs opacity-80">{title}</span>
       <strong className="mt-1 text-2xl font-bold">{number}</strong>
@@ -132,11 +144,11 @@ function Metric({ title, number, tone, icon }: { title: string; number: string; 
 }
 
 // ==========================================
-// 5. COMPONENT: Toast (คลีนขึ้น)
+// 5. COMPONENT: Toast (เปลี่ยนเป็น rounded-md)
 // ==========================================
 function Toast({ text, close }: { text: string; close: () => void }) { 
   return (
-    <div className="fixed right-4 top-4 z-30 flex min-w-[240px] items-center gap-2.5 rounded-lg bg-[#d7eedb] px-4 py-2.5 text-xs font-medium text-[#243f2a] shadow-md border border-[#bfe2c6]">
+    <div className="fixed right-4 top-4 z-30 flex min-w-[240px] items-center gap-2.5 rounded-md bg-[#d7eedb] px-4 py-2.5 text-xs font-medium text-[#243f2a] shadow-md border border-[#bfe2c6]">
       <Icon name="check" className="h-4 w-4 text-[#00a94f]"/>
       {text}
       <button onClick={close} className="ml-auto text-gray-500 hover:text-gray-700"><Icon name="x" className="h-3.5 w-3.5"/></button>
@@ -145,7 +157,7 @@ function Toast({ text, close }: { text: string; close: () => void }) {
 }
 
 // ==========================================
-// 6. MAIN PAGES (UserHome, AdminHistory, AdminHome)
+// 6. MAIN PAGES
 // ==========================================
 export function UserHome() { 
   return (
@@ -164,7 +176,8 @@ export function AdminHistory() {
     <div className="flex min-h-screen flex-col lg:flex-row">
       <Sidebar role="Admin" page="history"/>
       <main className="flex-1 bg-[#fafafa] p-4 lg:p-6">
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        {/* เปลี่ยนขอบตารางครอบเป็น rounded-md */}
+        <div className="overflow-hidden rounded-md border border-gray-200 bg-white shadow-sm">
           <table className="w-full min-w-[600px] border-collapse text-left text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
@@ -207,7 +220,6 @@ export function AdminHome() {
           <Metric title="Cancel" number="12" tone="bg-[#ed4d4f]" icon="x"/>
         </div>
         
-        {/* Tab Selection */}
         <div className="mt-8 flex gap-6 border-b border-gray-200 text-base">
           <button onClick={() => setTab('overview')} className={`pb-2 border-b-2 transition font-medium ${tab === 'overview' ? 'border-[#248ee0] text-[#248ee0]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Overview</button>
           <button onClick={() => setTab('create')} className={`pb-2 border-b-2 transition font-medium ${tab === 'create' ? 'border-[#248ee0] text-[#248ee0]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Create</button>
@@ -229,24 +241,24 @@ export function AdminHome() {
 }
 
 // ==========================================
-// 7. COMPONENT: CreateForm (ลดขนาดช่องป้อนและป้ายชื่อลงทั้งหมด)
+// 7. COMPONENT: CreateForm (เปลี่ยนอินพุตเป็น rounded-md)
 // ==========================================
 function CreateForm({ save }: { save: () => void }) { 
   return (
-    <form onSubmit={e => { e.preventDefault(); save(); }} className="mt-4 rounded-xl border border-gray-200 bg-white p-5 sm:p-6 shadow-sm">
+    <form onSubmit={e => { e.preventDefault(); save(); }} className="mt-4 rounded-md border border-gray-200 bg-white p-5 sm:p-6 shadow-sm">
       <h2 className="text-xl font-bold text-gray-800">Create Concert</h2>
       <div className="my-4 border-t border-gray-100"/>
       
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block text-sm font-medium text-gray-700">
           Concert Name
-          <input required placeholder="Please input concert name" className="mt-1 h-10 w-full rounded-lg border border-gray-300 px-3 text-sm outline-none focus:border-[#248ee0] focus:ring-1 focus:ring-[#248ee0] placeholder:text-gray-400"/>
+          <input required placeholder="Please input concert name" className="mt-1 h-10 w-full rounded-md border border-gray-300 px-3 text-sm outline-none focus:border-[#248ee0] focus:ring-1 focus:ring-[#248ee0] placeholder:text-gray-400"/>
         </label>
         
         <label className="block text-sm font-medium text-gray-700">
           Total of seats
           <div className="relative mt-1 flex">
-            <input defaultValue="500" type="number" className="h-10 w-full rounded-lg border border-gray-300 px-3 pr-10 text-sm outline-none focus:border-[#248ee0] focus:ring-1 focus:ring-[#248ee0]"/>
+            <input defaultValue="500" type="number" className="h-10 w-full rounded-md border border-gray-300 px-3 pr-10 text-sm outline-none focus:border-[#248ee0] focus:ring-1 focus:ring-[#248ee0]"/>
             <Icon name="user" className="pointer-events-none absolute right-3 top-2.5 h-5 w-5 text-gray-400"/>
           </div>
         </label>
@@ -254,11 +266,11 @@ function CreateForm({ save }: { save: () => void }) {
       
       <label className="mt-4 block text-sm font-medium text-gray-700">
         Description
-        <textarea placeholder="Please input description" className="mt-1 h-28 w-full resize-none rounded-lg border border-gray-300 p-3 text-sm outline-none focus:border-[#248ee0] focus:ring-1 focus:ring-[#248ee0] placeholder:text-gray-400"/>
+        <textarea placeholder="Please input description" className="mt-1 h-28 w-full resize-none rounded-md border border-gray-300 p-3 text-sm outline-none focus:border-[#248ee0] focus:ring-1 focus:ring-[#248ee0] placeholder:text-gray-400"/>
       </label>
       
       <div className="mt-5 flex">
-        <button className="ml-auto flex h-9 items-center gap-1.5 rounded-lg bg-[#248ee0] px-5 text-xs font-semibold text-white transition hover:bg-[#147bc9]">
+        <button className="ml-auto flex h-9 items-center gap-1.5 rounded-md bg-[#248ee0] px-5 text-xs font-semibold text-white transition hover:bg-[#147bc9]">
           <Icon name="save" className="h-3.5 w-3.5"/>
           Save Concert
         </button>
@@ -268,20 +280,20 @@ function CreateForm({ save }: { save: () => void }) {
 }
 
 // ==========================================
-// 8. COMPONENT: DeleteModal (ปรับกระชับ ไม่เบิ้ม)
+// 8. COMPONENT: DeleteModal (เปลี่ยนเป็น rounded-md)
 // ==========================================
 function DeleteModal({ cancel, remove }: { cancel: () => void; remove: () => void }) { 
   return (
     <div className="fixed inset-0 z-20 grid place-items-center bg-black/40 p-4">
-      <div className="w-full max-w-[400px] rounded-xl bg-white p-6 text-center shadow-xl border border-gray-100">
+      <div className="w-full max-w-[400px] rounded-md bg-white p-6 text-center shadow-xl border border-gray-100">
         <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-red-100 text-red-600">
           <Icon name="x" className="h-6 w-6"/>
         </span>
         <h2 className="mt-4 text-base font-bold text-gray-800">Are you sure to delete?<br/><span className="text-gray-500 font-medium text-sm">”Concert Name 2”</span></h2>
         
         <div className="mt-5 grid grid-cols-2 gap-3">
-          <button onClick={cancel} className="h-9 rounded-lg border border-gray-300 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition">Cancel</button>
-          <button onClick={remove} className="h-9 rounded-lg bg-[#ed3946] text-xs font-semibold text-white hover:bg-red-600 transition">Yes, Delete</button>
+          <button onClick={cancel} className="h-9 rounded-md border border-gray-300 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition">Cancel</button>
+          <button onClick={remove} className="h-9 rounded-md bg-[#ed3946] text-xs font-semibold text-white hover:bg-red-600 transition">Yes, Delete</button>
         </div>
       </div>
     </div>
