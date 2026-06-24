@@ -1,4 +1,5 @@
-import { EyeOffIcon, LockIcon, UserIcon } from './icons';
+import { useState } from 'react';
+import { EyeOffIcon, EyeIcon, LockIcon, UserIcon } from './icons';
 
 interface AuthFieldProps {
   label: string;
@@ -8,6 +9,8 @@ interface AuthFieldProps {
 }
 
 export function AuthField({ label, placeholder, name, password = false }: AuthFieldProps) {
+  const [showPassword, setShowPassword] = useState(false);
+
   return (
     <label className="block">
       <span className="mb-2 block text-xs font-medium text-gray-700">{label}</span>
@@ -15,13 +18,25 @@ export function AuthField({ label, placeholder, name, password = false }: AuthFi
         {password ? <LockIcon className="mr-3 h-4 w-4 shrink-0 text-gray-400" /> : <UserIcon className="mr-3 h-4 w-4 shrink-0 text-gray-400" />}
         
         <input 
-          type={password ? 'password' : 'text'} 
+          type={password ? (showPassword ? 'text' : 'password') : 'text'} 
           name={name} 
           placeholder={placeholder} 
           className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[#bcbcbc]" 
         />
         
-        {password && <EyeOffIcon className="h-4 w-4 text-gray-400" />}
+        {password && (
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="cursor-pointer"
+          >
+            {showPassword ? (
+              <EyeIcon className="h-4 w-4 text-gray-400" />
+            ) : (
+              <EyeOffIcon className="h-4 w-4 text-gray-400" />
+            )}
+          </button>
+        )}
       </span>
     </label>
   );
