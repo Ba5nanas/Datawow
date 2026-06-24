@@ -105,6 +105,6 @@ describe('AccessCard', () => {
     const { container } = render(<AccessCard title="User" admin={false} href="/user/login" />);
     const article = container.firstChild as HTMLElement;
     expect(article).toHaveClass('bg-white');
-    expect(article).toHaveClass('text-\[\\#0878ae\\]');
+    expect(article).toHaveAttribute('class', expect.stringContaining('text-[#0878ae]'));
   });
 });

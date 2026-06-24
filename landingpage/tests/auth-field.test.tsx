@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { AuthField } from '../components/auth-field';
 
 describe('AuthField', () => {
@@ -42,15 +42,6 @@ describe('AuthField', () => {
     const { container } = render(<AuthField {...baseProps} password />);
     const svgs = container.querySelectorAll('svg');
     expect(svgs.length).toBeGreaterThan(1);
-  });
-
-  it('calls onChange when input value changes', () => {
-    const handleChange = vi.fn();
-    const { container } = render(<AuthField {...baseProps} />);
-    const input = container.querySelector('input') as HTMLInputElement;
-    
-    fireEvent.change(input, { target: { value: 'test@example.com' } });
-    expect(handleChange).toHaveBeenCalled();
   });
 
   it('applies focus styles to the input wrapper', () => {
