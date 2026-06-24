@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { RegisterDto } from '../user/dto/register.dto';
-import { LoginDto } from './dto/login.dto';
+import { LoginDto, UserRole } from './dto/login.dto';
 import { Role } from '../common/enums/role.enum';
 
 describe('AuthController', () => {
@@ -56,6 +56,7 @@ describe('AuthController', () => {
       const loginDto: LoginDto = {
         email: 'test@example.com',
         password: 'password123',
+        role: UserRole.USER,
       };
 
       const result = await controller.login(loginDto);

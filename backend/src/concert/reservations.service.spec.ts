@@ -3,11 +3,13 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConcertService } from './concert.service';
 import { ConcertEntity } from '../common/entities/concert.entity';
 import { ConcertReservationEntity, ReservationAction } from '../common/entities/concert-reservation.entity';
+import { ConcertHistoryEntity, HistoryAction } from '../common/entities/concert-history.entity';
 
 describe('ConcertService - Reservation Edge Cases', () => {
   let service: ConcertService;
   let concertRepository: any;
   let reservationRepository: any;
+  let historyRepository: any;
 
   const mockConcert: ConcertEntity = {
     id: 'concert-1',
@@ -40,6 +42,25 @@ describe('ConcertService - Reservation Edge Cases', () => {
 
     reservationRepository = {
       findOne: jest.fn(),
+      find: jest.fn(),
+      count: jest.fn(),
+      create: jest.fn((data: any) => ({ ...data })),
+      save: jest.fn((entity: any) => Promise.resolve(entity)),
+      delete: jest.fn(),
+      createQueryBuilder: jest.fn(() => {
+        const builder: any = {};
+        builder.leftJoinAndSelect = jest.fn().mockImplementation(() => builder);
+        builder.select = jest.fn().mockImplementation(() => builder);
+        builder.addSelect = jest.fn().mockImplementation(() => builder);
+        builder.where = jest.fn().mockImplementation(() => builder);
+        builder.groupBy = jest.fn().mockImplementation(() => builder);
+        builder.orderBy = jest.fn().mockImplementation(() => builder);
+        builder.getRawMany = jest.fn();
+        return builder;
+      }),
+    };
+
+    historyRepository = {
       create: jest.fn((data: any) => ({ ...data })),
       save: jest.fn((entity: any) => Promise.resolve(entity)),
       createQueryBuilder: jest.fn(() => {
@@ -62,6 +83,10 @@ describe('ConcertService - Reservation Edge Cases', () => {
         {
           provide: 'ConcertReservationEntityRepository',
           useValue: reservationRepository,
+        },
+        {
+          provide: 'ConcertHistoryEntityRepository',
+          useValue: historyRepository,
         },
       ],
     }).compile();
@@ -98,17 +123,18 @@ describe('ConcertService - Reservation Edge Cases', () => {
       await expect(service.cancel('concert-1', 'user-1')).rejects.toThrow('No reservation found');
     });
 
-    it('Race condition: Mock availableSeats is 0 should throw BadRequestException', async () => {
-      concertRepository.findOne.mockResolvedValue({ ...mockConcert, availableSeats: 0 });
+    it('Race condition: count equals totalSeats should throw BadRequestException', async () => {
+      concertRepository.findOne.mockResolvedValue(mockConcert);
+      reservationRepository.count.mockResolvedValue(100);
 
       await expect(service.reserve('concert-1', 'user-1')).rejects.toThrow(BadRequestException);
       await expect(service.reserve('concert-1', 'user-1')).rejects.toThrow('Concert is fully booked');
-      expect(concertRepository.save).not.toHaveBeenCalled();
+      expect(reservationRepository.save).not.toHaveBeenCalled();
     });
 
-    it('Ensure no reservation is created when seat decrement fails', async () => {
-      concertRepository.findOne.mockResolvedValue({ ...mockConcert, availableSeats: 0 });
-      reservationRepository.findOne.mockResolvedValue(null);
+    it('Ensure no reservation is created when seat limit reached', async () => {
+      concertRepository.findOne.mockResolvedValue(mockConcert);
+      reservationRepository.count.mockResolvedValue(100);
 
       await expect(service.reserve('concert-1', 'user-1')).rejects.toThrow(BadRequestException);
 

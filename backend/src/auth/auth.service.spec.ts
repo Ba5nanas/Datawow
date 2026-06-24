@@ -3,7 +3,7 @@ import { AuthService } from './auth.service';
 import { UserService } from '../user/user.service';
 import { JwtService } from '@nestjs/jwt';
 import { RegisterDto } from '../user/dto/register.dto';
-import { LoginDto } from './dto/login.dto';
+import { LoginDto, UserRole } from './dto/login.dto';
 import { Role } from '../common/enums/role.enum';
 
 jest.mock('bcrypt', () => ({
@@ -125,21 +125,23 @@ describe('AuthService', () => {
 
   describe('login', () => {
     it('should login ADMIN successfully', async () => {
+      const user: any = { ...mockUser, email: 'admin@example.com', role: Role.ADMIN, password: 'hashedPassword123' };
       const loginDto: LoginDto = {
         email: 'admin@example.com',
         password: 'password123',
+        role: UserRole.ADMIN,
       };
 
-      userService.findByEmail.mockResolvedValue(mockUser);
+      userService.findByEmail.mockResolvedValue(user);
       jwtService.sign.mockReturnValue('mock-jwt-token');
 
       const result = await service.login(loginDto);
 
       expect(userService.findByEmail).toHaveBeenCalledWith('admin@example.com');
       expect(jwtService.sign).toHaveBeenCalledWith({
-        sub: mockUser.id,
-        email: mockUser.email,
-        role: mockUser.role,
+        sub: user.id,
+        email: user.email,
+        role: user.role,
       });
       expect(result).toEqual({ access_token: 'mock-jwt-token' });
     });
@@ -149,6 +151,7 @@ describe('AuthService', () => {
       const loginDto: LoginDto = {
         email: 'user@example.com',
         password: 'password123',
+        role: UserRole.USER,
       };
 
       userService.findByEmail.mockResolvedValue(user);
@@ -169,6 +172,7 @@ describe('AuthService', () => {
       const loginDto: LoginDto = {
         email: 'test@example.com',
         password: 'wrongpassword',
+        role: UserRole.USER,
       };
 
       userService.findByEmail.mockResolvedValue(mockUser);
@@ -181,6 +185,7 @@ describe('AuthService', () => {
       const loginDto: LoginDto = {
         email: 'nonexistent@example.com',
         password: 'password123',
+        role: UserRole.USER,
       };
 
       userService.findByEmail.mockResolvedValue(null);
@@ -194,6 +199,7 @@ describe('AuthService', () => {
       const loginDto: LoginDto = {
         email: 'test@example.com',
         password: 'password123',
+        role: UserRole.USER,
       };
 
       userService.findByEmail.mockResolvedValue(mockUser);

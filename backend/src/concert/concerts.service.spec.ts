@@ -3,12 +3,14 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConcertService } from './concert.service';
 import { ConcertEntity } from '../common/entities/concert.entity';
 import { ConcertReservationEntity, ReservationAction } from '../common/entities/concert-reservation.entity';
+import { ConcertHistoryEntity, HistoryAction } from '../common/entities/concert-history.entity';
 import { CreateConcertDto } from './dto/create-concert.dto';
 
 describe('ConcertService', () => {
   let service: ConcertService;
   let concertRepository: any;
   let reservationRepository: any;
+  let historyRepository: any;
 
   const mockConcert: ConcertEntity = {
     id: 'concert-1',
@@ -41,8 +43,27 @@ describe('ConcertService', () => {
 
     reservationRepository = {
       findOne: jest.fn(),
+      find: jest.fn(),
+      count: jest.fn(),
       create: jest.fn((data: any) => ({ ...data })),
       save: jest.fn((entity: any) => Promise.resolve({ ...entity, id: 'reservation-1', createdAt: new Date() })),
+      delete: jest.fn(),
+      createQueryBuilder: jest.fn(() => {
+        const builder: any = {};
+        builder.leftJoinAndSelect = jest.fn().mockImplementation(() => builder);
+        builder.select = jest.fn().mockImplementation(() => builder);
+        builder.addSelect = jest.fn().mockImplementation(() => builder);
+        builder.where = jest.fn().mockImplementation(() => builder);
+        builder.groupBy = jest.fn().mockImplementation(() => builder);
+        builder.orderBy = jest.fn().mockImplementation(() => builder);
+        builder.getRawMany = jest.fn();
+        return builder;
+      }),
+    };
+
+    historyRepository = {
+      create: jest.fn((data: any) => ({ ...data })),
+      save: jest.fn((entity: any) => Promise.resolve(entity)),
       createQueryBuilder: jest.fn(() => {
         const builder: any = {};
         builder.leftJoinAndSelect = jest.fn().mockImplementation(() => builder);
@@ -64,6 +85,10 @@ describe('ConcertService', () => {
           provide: 'ConcertReservationEntityRepository',
           useValue: reservationRepository,
         },
+        {
+          provide: 'ConcertHistoryEntityRepository',
+          useValue: historyRepository,
+        },
       ],
     }).compile();
 
@@ -73,11 +98,51 @@ describe('ConcertService', () => {
   describe('findAll', () => {
     it('should return all concerts', async () => {
       concertRepository.find.mockResolvedValue([mockConcert]);
+      reservationRepository.find.mockResolvedValue([]);
+      reservationRepository.createQueryBuilder.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([]),
+      });
 
       const result = await service.findAll();
 
       expect(concertRepository.find).toHaveBeenCalledWith({ order: { createdAt: 'DESC' } });
       expect(result).toEqual([mockConcert]);
+    });
+
+    it('should return concerts with reservedSeats count', async () => {
+      concertRepository.find.mockResolvedValue([mockConcert]);
+      reservationRepository.find.mockResolvedValue([]);
+      reservationRepository.createQueryBuilder.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([{ concertId: 'concert-1', count: '50' }]),
+      });
+
+      const result = await service.findAll('user-1');
+
+      expect(result[0].reservedSeats).toBe(50);
+    });
+
+    it('should include userReservationStatus when userId provided', async () => {
+      concertRepository.find.mockResolvedValue([mockConcert]);
+      reservationRepository.find.mockResolvedValue([{ concertId: 'concert-1' }]);
+      reservationRepository.createQueryBuilder.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([]),
+      });
+
+      const result = await service.findAll('user-1');
+
+      expect(result[0].userReservationStatus).toBe('reserved');
     });
   });
 
@@ -206,10 +271,13 @@ describe('ConcertService', () => {
 
   describe('reserve', () => {
     it('USER can reserve a seat successfully', async () => {
-      concertRepository.findOne.mockResolvedValue({ ...mockConcert, availableSeats: 5 });
+      concertRepository.findOne.mockResolvedValue(mockConcert);
+      reservationRepository.count.mockResolvedValue(0);
       reservationRepository.findOne.mockResolvedValue(null);
       reservationRepository.create.mockReturnValue(mockReservation);
       reservationRepository.save.mockResolvedValue(mockReservation);
+      historyRepository.create.mockReturnValue({ action: HistoryAction.reserve });
+      historyRepository.save.mockResolvedValue({ action: HistoryAction.reserve });
 
       const result = await service.reserve('concert-1', 'user-1');
 
@@ -217,22 +285,26 @@ describe('ConcertService', () => {
       expect(result.action).toBe(ReservationAction.reserve);
     });
 
-    it('Reserving a seat decreases availableSeats by 1', async () => {
-      concertRepository.findOne.mockResolvedValue({ ...mockConcert, availableSeats: 5 });
+    it('Reserving creates a history record', async () => {
+      concertRepository.findOne.mockResolvedValue(mockConcert);
+      reservationRepository.count.mockResolvedValue(0);
       reservationRepository.findOne.mockResolvedValue(null);
       reservationRepository.create.mockReturnValue(mockReservation);
-      concertRepository.save.mockResolvedValue(mockConcert);
       reservationRepository.save.mockResolvedValue(mockReservation);
+      historyRepository.create.mockReturnValue({ action: HistoryAction.reserve });
+      historyRepository.save.mockResolvedValue({ action: HistoryAction.reserve });
 
       await service.reserve('concert-1', 'user-1');
 
-      expect(concertRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({ availableSeats: 4 }),
+      expect(historyRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ action: HistoryAction.reserve }),
       );
+      expect(historyRepository.save).toHaveBeenCalled();
     });
 
     it('USER cannot reserve the same concert twice', async () => {
-      concertRepository.findOne.mockResolvedValue({ ...mockConcert, availableSeats: 5 });
+      concertRepository.findOne.mockResolvedValue(mockConcert);
+      reservationRepository.count.mockResolvedValue(0);
       reservationRepository.findOne.mockResolvedValue(mockReservation);
 
       await expect(service.reserve('concert-1', 'user-1')).rejects.toThrow(BadRequestException);
@@ -240,7 +312,8 @@ describe('ConcertService', () => {
     });
 
     it('USER cannot reserve when concert is full', async () => {
-      concertRepository.findOne.mockResolvedValue({ ...mockConcert, availableSeats: 0 });
+      concertRepository.findOne.mockResolvedValue(mockConcert);
+      reservationRepository.count.mockResolvedValue(100);
 
       await expect(service.reserve('concert-1', 'user-1')).rejects.toThrow(BadRequestException);
       await expect(service.reserve('concert-1', 'user-1')).rejects.toThrow('Concert is fully booked');
@@ -259,44 +332,46 @@ describe('ConcertService', () => {
       await expect(service.reserve('deleted-concert', 'user-1')).rejects.toThrow(NotFoundException);
     });
 
-    it('Mock race condition: availableSeats is 0 should throw BadRequestException', async () => {
-      concertRepository.findOne.mockResolvedValue({ ...mockConcert, availableSeats: 0 });
+    it('Race condition: count equals totalSeats should throw BadRequestException', async () => {
+      concertRepository.findOne.mockResolvedValue(mockConcert);
+      reservationRepository.count.mockResolvedValue(100);
 
       await expect(service.reserve('concert-1', 'user-1')).rejects.toThrow(BadRequestException);
       await expect(service.reserve('concert-1', 'user-1')).rejects.toThrow('Concert is fully booked');
-      expect(concertRepository.save).not.toHaveBeenCalled();
+      expect(reservationRepository.save).not.toHaveBeenCalled();
     });
   });
 
   describe('cancel', () => {
     it('USER can cancel an existing reservation', async () => {
-      concertRepository.findOne.mockResolvedValue({ ...mockConcert, availableSeats: 5 });
+      concertRepository.findOne.mockResolvedValue(mockConcert);
       reservationRepository.findOne.mockResolvedValue(mockReservation);
-      reservationRepository.create.mockImplementation((data: any) => ({ ...data }));
-      reservationRepository.save.mockResolvedValue({ id: 'reservation-1', action: ReservationAction.cancel, createdAt: new Date() });
-      concertRepository.save.mockResolvedValue(mockConcert);
-
-      const result = await service.cancel('concert-1', 'user-1');
-
-      expect(result.action).toBe(ReservationAction.cancel);
-    });
-
-    it('Canceling reservation increases availableSeats by 1', async () => {
-      concertRepository.findOne.mockResolvedValue({ ...mockConcert, availableSeats: 5 });
-      reservationRepository.findOne.mockResolvedValue(mockReservation);
-      reservationRepository.create.mockImplementation((data: any) => ({ ...data }));
-      reservationRepository.save.mockResolvedValue({ id: 'reservation-1', action: ReservationAction.cancel, createdAt: new Date() });
-      concertRepository.save.mockResolvedValue(mockConcert);
+      reservationRepository.delete.mockResolvedValue({ affected: 1 });
+      historyRepository.create.mockReturnValue({ action: HistoryAction.cancel });
+      historyRepository.save.mockResolvedValue({ action: HistoryAction.cancel });
 
       await service.cancel('concert-1', 'user-1');
 
-      expect(concertRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({ availableSeats: 6 }),
+      expect(reservationRepository.delete).toHaveBeenCalledWith(mockReservation.id);
+    });
+
+    it('Canceling creates a history record', async () => {
+      concertRepository.findOne.mockResolvedValue(mockConcert);
+      reservationRepository.findOne.mockResolvedValue(mockReservation);
+      reservationRepository.delete.mockResolvedValue({ affected: 1 });
+      historyRepository.create.mockReturnValue({ action: HistoryAction.cancel });
+      historyRepository.save.mockResolvedValue({ action: HistoryAction.cancel });
+
+      await service.cancel('concert-1', 'user-1');
+
+      expect(historyRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ action: HistoryAction.cancel }),
       );
+      expect(historyRepository.save).toHaveBeenCalled();
     });
 
     it('USER cannot cancel when there is no active reservation', async () => {
-      concertRepository.findOne.mockResolvedValue({ ...mockConcert, availableSeats: 5 });
+      concertRepository.findOne.mockResolvedValue(mockConcert);
       reservationRepository.findOne.mockResolvedValue(null);
 
       await expect(service.cancel('concert-1', 'user-1')).rejects.toThrow(BadRequestException);
@@ -329,7 +404,7 @@ describe('ConcertService', () => {
       mockBuilder.select = jest.fn().mockImplementation(() => mockBuilder);
       mockBuilder.orderBy = jest.fn().mockImplementation(() => mockBuilder);
       mockBuilder.getRawMany = jest.fn().mockResolvedValue(mockHistory);
-      reservationRepository.createQueryBuilder.mockReturnValue(mockBuilder);
+      historyRepository.createQueryBuilder.mockReturnValue(mockBuilder);
 
       const result = await service.getHistory();
 
