@@ -18,7 +18,3 @@ docker compose up --build
 Both services run in dev mode with hot-reload enabled via volume mounts.
 
 Changes to source files will automatically trigger rebuild/restart.
-
-## API Proxy
-
-Landingpage automatically proxies `/api/*` requests to the Backend.
