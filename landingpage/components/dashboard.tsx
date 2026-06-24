@@ -8,8 +8,12 @@ import { deleteCookie } from '../utils/cookie';
 const LANDINGPAGE_URL = process.env.LANDINGPAGE_URL || 'http://localhost:5001';
 
 function getCookie(name: string) {
+
+  if (typeof window === 'undefined') return '';
+
   const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-  return match ? match[2] : '';
+
+  return match ? decodeURIComponent(match[2]) : '';
 }
 
 // ==========================================
@@ -19,6 +23,7 @@ async function apiFetch(endpoint: string, options: RequestInit, token: string) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(options.headers as Record<string, string>) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${LANDINGPAGE_URL}/api/concert${endpoint}`, { ...options, headers });
+  console.log("res : ", res);
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
     const message = error.error || error.message || `Request failed (${res.status})`;
@@ -231,12 +236,26 @@ function Toast({ text, close }: { text: string; close: () => void }) {
 }
 
 // ==========================================
+// 5b. COMPONENT: ToastError
+// ==========================================
+function ToastError({ text, close }: { text: string; close: () => void }) { 
+  return (
+    <div className="fixed right-4 top-4 z-30 flex min-w-[240px] items-center gap-2.5 rounded-md bg-[#fcd7d7] px-4 py-2.5 text-xs font-medium text-[#7b1e1e] shadow-md border border-[#f8b4b4]">
+      <Icon name="x" className="h-4 w-4 text-[#ed4d4f]"/>
+      {text}
+      <button onClick={close} className="ml-auto text-gray-500 hover:text-gray-700"><Icon name="x" className="h-3.5 w-3.5"/></button>
+    </div>
+  ); 
+}
+
+// ==========================================
 // 6. MAIN PAGES
 // ==========================================
 export function UserHome() { 
   const [concerts, setConcerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
+  const [toastError, setToastError] = useState('');
   const token = getCookie('token');
 
   useEffect(() => {
@@ -250,9 +269,10 @@ export function UserHome() {
     try {
       await reserveConcert(id, token);
       setToast('Reserve successfully');
-      setConcerts(prev => prev.map(c => c.id === id ? { ...c, isReserved: true } : c));
+      const updated = await fetchConcerts(token);
+      setConcerts(updated);
     } catch (err: any) {
-      setToast(err.message || 'Reserve failed');
+      setToastError(err.message || 'Reserve failed');
     }
   };
 
@@ -260,9 +280,10 @@ export function UserHome() {
     try {
       await cancelConcert(id, token);
       setToast('Cancel successfully');
-      setConcerts(prev => prev.map(c => c.id === id ? { ...c, isReserved: false } : c));
+      const updated = await fetchConcerts(token);
+      setConcerts(updated);
     } catch (err: any) {
-      setToast(err.message || 'Cancel failed');
+      setToastError(err.message || 'Cancel failed');
     }
   };
 
@@ -271,6 +292,7 @@ export function UserHome() {
       <Sidebar role="User" page="home"/>
       <main className="flex-1 space-y-4 bg-[#fafafa] p-4 lg:p-6">
         {toast && <Toast text={toast} close={() => setToast('')}/>}
+        {toastError && <ToastError text={toastError} close={() => setToastError('')}/>}
         {loading ? (
           <p className="text-center text-gray-500">Loading...</p>
         ) : (
@@ -282,7 +304,7 @@ export function UserHome() {
               seats={concert.totalSeats - (concert.reservedSeats || 0)}
               totalSeats={concert.totalSeats}
               token={token}
-              isReserved={concert.isReserved}
+              isReserved={concert.userReservationStatus === 'reserved'}
               onReserve={() => handleReserve(concert.id)}
               onCancel={() => handleCancel(concert.id)}
             />
@@ -296,12 +318,14 @@ export function UserHome() {
 export function AdminHistory() { 
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [toastError, setToastError] = useState('');
   const token = getCookie('token');
 
   useEffect(() => {
     if (!token) return;
     getHistory(token)
       .then(setHistory)
+      .catch((err: any) => setToastError(err.message || 'Failed to load'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -309,6 +333,7 @@ export function AdminHistory() {
     <div className="flex min-h-screen flex-col lg:flex-row">
       <Sidebar role="Admin" page="history"/>
       <main className="flex-1 bg-[#fafafa] p-4 lg:p-6">
+        {toastError && <ToastError text={toastError} close={() => setToastError('')}/>}
         {loading ? (
           <p className="text-center text-gray-500">Loading...</p>
         ) : (
@@ -344,6 +369,7 @@ export function AdminHome() {
   const [deleteModal, setDeleteModal] = useState(false); 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [toast, setToast] = useState('');
+  const [toastError, setToastError] = useState('');
   const [concerts, setConcerts] = useState<any[]>([]);
   const [metrics, setMetrics] = useState({ totalSeats: '0', reserved: '0', cancelled: '0' });
   const [loading, setLoading] = useState(true);
@@ -358,6 +384,7 @@ export function AdminHome() {
         const reserved = data.reduce((sum, c) => sum + (c.reservedSeats || 0), 0);
         setMetrics({ totalSeats: String(totalSeats), reserved: String(reserved), cancelled: '0' });
       })
+      .catch((err: any) => setToastError(err.message || 'Failed to load'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -378,7 +405,7 @@ export function AdminHome() {
       const reservedSum = updated.reduce((sum, c) => sum + (c.reservedSeats || 0), 0);
       setMetrics({ totalSeats: String(totalSeatsSum), reserved: String(reservedSum), cancelled: '0' });
     } catch (err: any) {
-      setToast(err.message || 'Create failed');
+      setToastError(err.message || 'Create failed');
     }
   };
 
@@ -395,7 +422,7 @@ export function AdminHome() {
       const reservedSum = updated.reduce((sum, c) => sum + (c.reservedSeats || 0), 0);
       setMetrics({ totalSeats: String(totalSeatsSum), reserved: String(reservedSum), cancelled: '0' });
     } catch (err: any) {
-      setToast(err.message || 'Delete failed');
+      setToastError(err.message || 'Delete failed');
     }
   };
 
@@ -403,6 +430,7 @@ export function AdminHome() {
     <div className="flex min-h-screen flex-col lg:flex-row">
       <Sidebar role="Admin" page="home"/>
       {toast && <Toast text={toast} close={() => setToast('')}/>}
+      {toastError && <ToastError text={toastError} close={() => setToastError('')}/>}
       
       <main className="flex-1 bg-[#fafafa] p-4 lg:p-6">
         <div className="grid gap-4 grid-cols-3">

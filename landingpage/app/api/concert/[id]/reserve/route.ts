@@ -19,7 +19,6 @@ export async function POST(
       method: 'POST',
       headers,
     });
-
     if (!response.ok) {
       const error = await response.json();
       return NextResponse.json(

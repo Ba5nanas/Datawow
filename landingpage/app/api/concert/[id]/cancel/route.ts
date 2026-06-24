@@ -22,6 +22,7 @@ export async function POST(
 
     if (!response.ok) {
       const error = await response.json();
+      
       return NextResponse.json(
         { error: error.message || 'Failed to cancel concert' },
         { status: response.status }
@@ -29,8 +30,10 @@ export async function POST(
     }
 
     const data = await response.json();
+ 
     return NextResponse.json(data);
   } catch (error) {
+    console.log(error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
