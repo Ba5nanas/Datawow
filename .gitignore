@@ -1,5 +1,27 @@
+# Node.js
 node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build output
 dist/
-.DS_Store
+build/
+.next/
+out/
+
+# Env files
 .env
-work.md
+.env.local
+.env.*.local
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/mbs.db
+.vscode/
+.idea/
