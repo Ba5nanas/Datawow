@@ -1,9 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository } from 'typeorm';
 import { ConcertEntity } from '../common/entities/concert.entity';
 import { ConcertReservationEntity, ReservationAction } from '../common/entities/concert-reservation.entity';
-import { UserEntity } from '../common/entities/user.entity';
 import { CreateConcertDto } from './dto/create-concert.dto';
 
 @Injectable()
@@ -13,7 +12,6 @@ export class ConcertService {
     private readonly concertRepository: Repository<ConcertEntity>,
     @InjectRepository(ConcertReservationEntity)
     private readonly reservationRepository: Repository<ConcertReservationEntity>,
-    private readonly dataSource: DataSource,
   ) {}
 
   async findAll(): Promise<ConcertEntity[]> {
@@ -36,101 +34,68 @@ export class ConcertService {
   }
 
   async remove(id: string): Promise<void> {
-    await this.concertRepository.delete(id);
+    const result = await this.concertRepository.delete(id);
+    if (result.affected === 0) {
+      throw new NotFoundException('Concert not found');
+    }
   }
 
   async reserve(id: string, userId: string): Promise<ConcertReservationEntity> {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    const concert = await this.concertRepository.findOne({ where: { id } });
 
-    try {
-      const concert = await queryRunner.manager.findOne(ConcertEntity, {
-        where: { id },
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      if (!concert) {
-        throw new Error('Concert not found');
-      }
-
-      if (concert.availableSeats <= 0) {
-        throw new Error('No available seats');
-      }
-
-      const existingReservation = await queryRunner.manager.findOne(ConcertReservationEntity, {
-        where: { concertId: id, userId, action: ReservationAction.reserve },
-      });
-
-      if (existingReservation) {
-        throw new Error('Already reserved this concert');
-      }
-
-      concert.availableSeats -= 1;
-      await queryRunner.manager.save(concert);
-
-      const reservation = queryRunner.manager.create(ConcertReservationEntity, {
-        concertId: concert.id,
-        userId,
-        action: ReservationAction.reserve,
-      });
-
-      await queryRunner.manager.save(reservation);
-
-      await queryRunner.commitTransaction();
-
-      return reservation;
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
+    if (!concert) {
+      throw new NotFoundException('Concert not found');
     }
+
+    if (concert.availableSeats <= 0) {
+      throw new BadRequestException('Concert is fully booked');
+    }
+
+    const existingReservation = await this.reservationRepository.findOne({
+      where: { concertId: id, userId, action: ReservationAction.reserve },
+    });
+
+    if (existingReservation) {
+      throw new BadRequestException('Already reserved this concert');
+    }
+
+    concert.availableSeats -= 1;
+    await this.concertRepository.save(concert);
+
+    const reservation = this.reservationRepository.create({
+      concertId: concert.id,
+      userId,
+      action: ReservationAction.reserve,
+    });
+
+    return this.reservationRepository.save(reservation);
   }
 
   async cancel(id: string, userId: string): Promise<ConcertReservationEntity> {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    const concert = await this.concertRepository.findOne({ where: { id } });
 
-    try {
-      const concert = await queryRunner.manager.findOne(ConcertEntity, {
-        where: { id },
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      if (!concert) {
-        throw new Error('Concert not found');
-      }
-
-      const reservation = await queryRunner.manager.findOne(ConcertReservationEntity, {
-        where: { concertId: id, userId, action: ReservationAction.reserve },
-      });
-
-      if (!reservation) {
-        throw new Error('No reservation found');
-      }
-
-      concert.availableSeats += 1;
-      await queryRunner.manager.save(concert);
-
-      const cancelRecord = queryRunner.manager.create(ConcertReservationEntity, {
-        concertId: concert.id,
-        userId,
-        action: ReservationAction.cancel,
-      });
-
-      await queryRunner.manager.save(cancelRecord);
-
-      await queryRunner.commitTransaction();
-
-      return cancelRecord;
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
+    if (!concert) {
+      throw new NotFoundException('Concert not found');
     }
+
+    const reservation = await this.reservationRepository.findOne({
+      where: { concertId: id, userId, action: ReservationAction.reserve },
+    });
+
+    if (!reservation) {
+      throw new BadRequestException('No reservation found');
+    }
+
+    concert.availableSeats += 1;
+    await this.concertRepository.save(concert);
+
+    const cancelRecord = this.reservationRepository.create({
+      concertId: concert.id,
+      userId,
+      action: ReservationAction.cancel,
+    });
+
+    return this.reservationRepository.save(cancelRecord);
   }
 
   async getHistory(): Promise<any[]> {
