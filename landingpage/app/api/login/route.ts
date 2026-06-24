@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, role }),
     });
-    console.log(response);
+
     if (!response.ok) {
       const error = await response.json();
       return NextResponse.json(
@@ -28,7 +28,24 @@ export async function POST(request: NextRequest) {
     const payload = JSON.parse(Buffer.from(access_token.split('.')[1], 'base64').toString());
     const itemRole = payload.role;
 
-    return NextResponse.json({ token: access_token, role: itemRole });
+    // Set httpOnly cookies server-side
+    const cookieRes = NextResponse.json({ token: access_token, role: itemRole });
+    cookieRes.cookies.set('token', access_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7,
+      path: '/',
+    });
+    cookieRes.cookies.set('role', itemRole, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7,
+      path: '/',
+    });
+
+    return cookieRes;
   } catch (error) {
     console.log(error);
     return NextResponse.json(

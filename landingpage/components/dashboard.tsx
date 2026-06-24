@@ -5,23 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { deleteCookie } from '../utils/cookie';
 
-const LANDINGPAGE_URL = process.env.LANDINGPAGE_URL || 'http://localhost:5001';
-
-function getCookie(name: string) {
-
-  if (typeof window === 'undefined') return '';
-
-  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-
-  return match ? decodeURIComponent(match[2]) : '';
-}
+const LANDINGPAGE_URL = process.env.NEXT_PUBLIC_LANDINGPAGE_URL || 'http://localhost:5001';
 
 // ==========================================
 // API helpers
 // ==========================================
-async function apiFetch(endpoint: string, options: RequestInit, token: string) {
+async function apiFetch(endpoint: string, options: RequestInit) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(options.headers as Record<string, string>) };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${LANDINGPAGE_URL}/api/concert${endpoint}`, { ...options, headers });
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
@@ -32,28 +22,28 @@ async function apiFetch(endpoint: string, options: RequestInit, token: string) {
   return res.json();
 }
 
-async function fetchConcerts(token: string) {
-  return apiFetch('', { method: 'GET' }, token);
+async function fetchConcerts() {
+  return apiFetch('', { method: 'GET' });
 }
 
-async function createConcert(token: string, data: { name: string; totalSeats: number; description?: string }) {
-  return apiFetch('', { method: 'POST', body: JSON.stringify(data) }, token);
+async function createConcert(data: { name: string; totalSeats: number; description?: string }) {
+  return apiFetch('', { method: 'POST', body: JSON.stringify(data) });
 }
 
-async function deleteConcert(id: string, token: string) {
-  return apiFetch(`/${id}`, { method: 'DELETE' }, token);
+async function deleteConcert(id: string) {
+  return apiFetch(`/${id}`, { method: 'DELETE' });
 }
 
-async function reserveConcert(id: string, token: string) {
-  return apiFetch(`/${id}/reserve`, { method: 'POST', body: '{}' }, token);
+async function reserveConcert(id: string) {
+  return apiFetch(`/${id}/reserve`, { method: 'POST', body: '{}' });
 }
 
-async function cancelConcert(id: string, token: string) {
-  return apiFetch(`/${id}/cancel`, { method: 'POST', body: '{}' }, token);
+async function cancelConcert(id: string) {
+  return apiFetch(`/${id}/cancel`, { method: 'POST', body: '{}' });
 }
 
-async function getHistory(token: string) {
-  return apiFetch('/history', { method: 'GET' }, token);
+async function getHistory() {
+  return apiFetch('/history', { method: 'GET' });
 }
 
 // ==========================================
@@ -166,7 +156,6 @@ function ConcertCard({ id, title, seats, totalSeats, admin, onDelete, onReserve,
   onReserve?: () => void; 
   onCancel?: () => void; 
   isReserved?: boolean; 
-  token?: string; 
 }) {
   const [reserved, setReserved] = useState(isReserved);
 
@@ -264,20 +253,19 @@ export function UserHome() {
   const [toast, setToast] = useState('');
   const [toastError, setToastError] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
-  const token = getCookie('token');
+
 
   useEffect(() => {
-    if (!token) return;
-    fetchConcerts(token)
+    fetchConcerts()
       .then(setConcerts)
       .finally(() => setLoading(false));
   }, []);
 
   const handleReserve = async (id: string) => {
     try {
-      await reserveConcert(id, token);
+      await reserveConcert(id);
       setToast('Reserve successfully');
-      const updated = await fetchConcerts(token);
+      const updated = await fetchConcerts();
       setConcerts(updated);
     } catch (err: any) {
       setToastError(err.message || 'Reserve failed');
@@ -286,9 +274,9 @@ export function UserHome() {
 
   const handleCancel = async (id: string) => {
     try {
-      await cancelConcert(id, token);
+      await cancelConcert(id);
       setToast('Cancel successfully');
-      const updated = await fetchConcerts(token);
+      const updated = await fetchConcerts();
       setConcerts(updated);
     } catch (err: any) {
       setToastError(err.message || 'Cancel failed');
@@ -315,7 +303,6 @@ export function UserHome() {
               title={concert.name} 
               seats={concert.totalSeats - (concert.reservedSeats || 0)}
               totalSeats={concert.totalSeats}
-              token={token}
               isReserved={concert.userReservationStatus === 'reserved'}
               onReserve={() => handleReserve(concert.id)}
               onCancel={() => handleCancel(concert.id)}
@@ -332,11 +319,9 @@ export function AdminHistory() {
   const [loading, setLoading] = useState(true);
   const [toastError, setToastError] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
-  const token = getCookie('token');
 
   useEffect(() => {
-    if (!token) return;
-    getHistory(token)
+    getHistory()
       .then(setHistory)
       .catch((err: any) => setToastError(err.message || 'Failed to load'))
       .finally(() => setLoading(false));
@@ -391,11 +376,9 @@ export function AdminHome() {
   const [metrics, setMetrics] = useState({ totalSeats: '0', reserved: '0', cancelled: '0' });
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
-  const token = getCookie('token');
 
   useEffect(() => {
-    if (!token) return;
-    fetchConcerts(token)
+    fetchConcerts()
       .then(data => {
         setConcerts(data);
         const totalSeats = data.reduce((sum: number, c: any) => sum + (c.totalSeats || 0), 0);
@@ -414,10 +397,10 @@ export function AdminHome() {
     const description = (form.elements.namedItem('description') as HTMLTextAreaElement).value;
     
     try {
-      await createConcert(token, { name, totalSeats, description });
+      await createConcert({ name, totalSeats, description });
       setToast('Create successfully');
       setTab('overview');
-      const updated = await fetchConcerts(token);
+      const updated = await fetchConcerts();
       setConcerts(updated);
       const totalSeatsSum = updated.reduce((sum: number, c: any) => sum + (c.totalSeats || 0), 0);
       const reservedSum = updated.reduce((sum: number, c: any) => sum + (c.reservedSeats || 0), 0);
@@ -430,11 +413,11 @@ export function AdminHome() {
   const handleDelete = async () => {
     if (!deleteId) { setDeleteModal(false); return; }
     try {
-      await deleteConcert(deleteId, token);
+      await deleteConcert(deleteId);
       setToast('Delete successfully');
       setDeleteModal(false);
       setDeleteId(null);
-      const updated = await fetchConcerts(token);
+      const updated = await fetchConcerts();
       setConcerts(updated);
       const totalSeatsSum = updated.reduce((sum: number, c: any) => sum + (c.totalSeats || 0), 0);
       const reservedSum = updated.reduce((sum: number, c: any) => sum + (c.reservedSeats || 0), 0);
@@ -485,7 +468,7 @@ export function AdminHome() {
             </div>
           )
         ) : (
-          <CreateForm save={() => setTab('overview')} token={token} onSubmit={handleCreate}/>
+          <CreateForm save={() => setTab('overview')} onSubmit={handleCreate}/>
         )}
       </main>
       
@@ -497,7 +480,7 @@ export function AdminHome() {
 // ==========================================
 // 7. COMPONENT: CreateForm
 // ==========================================
-function CreateForm({ save, token, onSubmit }: { save: () => void; token: string; onSubmit: (e: React.FormEvent) => void }) { 
+function CreateForm({ save, onSubmit }: { save: () => void; onSubmit: (e: React.FormEvent) => void }) { 
   return (
     <form onSubmit={onSubmit} className="mt-4 rounded-md border border-gray-200 bg-white p-5 sm:p-6 shadow-sm">
       <h2 className="text-xl font-bold text-gray-800">Create Concert</h2>

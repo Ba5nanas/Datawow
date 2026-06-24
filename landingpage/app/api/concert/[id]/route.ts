@@ -8,7 +8,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const token = request.headers.get('authorization')?.replace('Bearer ', '');
+    const token = request.cookies.get('token')?.value;
 
     const headers: HeadersInit = { 'Content-Type': 'application/json' };
     if (token) {
@@ -45,7 +45,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const token = request.headers.get('authorization')?.replace('Bearer ', '');
+    const token = request.cookies.get('token')?.value;
 
     const headers: HeadersInit = { 'Content-Type': 'application/json' };
     if (token) {

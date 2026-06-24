@@ -4,7 +4,7 @@ const BACKEND_URL = process.env.BACKEND_URL || 'http://backend:3000';
 
 export async function GET(request: NextRequest) {
   try {
-    const token = request.headers.get('authorization')?.replace('Bearer ', '');
+    const token = request.cookies.get('token')?.value;
 
     const headers: HeadersInit = { 'Content-Type': 'application/json' };
     if (token) {

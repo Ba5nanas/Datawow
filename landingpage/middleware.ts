@@ -1,19 +1,76 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// ดึง URL ของ Backend จาก environment variable
-const BACKEND_URL = process.env.BACKEND_URL || 'http://backend:3000';
+// URL ของ Landing Page สำหรับเรียก API
+const BACKEND_URL =
+  process.env.BACKEND_URL || 'http://backend:3000';
+
+type UserRole = 'admin' | 'user';
 
 /**
- * ฟังก์ชันสำหรับส่ง Token ไปตรวจสอบความถูกต้องที่ Backend
+ * ตรวจว่า request นี้เป็น prefetch / request แอบยิงของ Next.js หรือไม่
+ * request พวกนี้ห้าม logout / ห้ามล้าง cookie
+ */
+function isPrefetchRequest(request: NextRequest): boolean {
+  return (
+    request.headers.get('next-router-prefetch') === '1' ||
+    request.headers.get('purpose') === 'prefetch' ||
+    request.headers.get('x-middleware-prefetch') === '1' ||
+    Boolean(request.headers.get('sec-purpose')?.includes('prefetch'))
+  );
+}
+
+/**
+ * ตรวจว่าเป็น RSC request ของ Next.js หรือไม่
+ * พวกนี้ไม่ใช่การเปิด page จริง
+ */
+function isRSCRequest(request: NextRequest): boolean {
+  const accept = request.headers.get('accept') || '';
+
+  return (
+    request.headers.get('rsc') === '1' ||
+    accept.includes('text/x-component')
+  );
+}
+
+/**
+ * ตรวจว่าเป็นการเปิดหน้าเว็บจริงจาก browser หรือไม่
+ *
+ * ใช้สำหรับตัดสินใจว่า:
+ * - ถ้า admin เปิด /user จริง ๆ => logout
+ * - ถ้า user เปิด /admin จริง ๆ => logout
+ *
+ * แต่ถ้าเป็น prefetch / RSC / request แอบยิง => ไม่ logout
+ */
+function isRealPageNavigation(request: NextRequest): boolean {
+  const accept = request.headers.get('accept') || '';
+  const secFetchDest = request.headers.get('sec-fetch-dest') || '';
+  const secFetchMode = request.headers.get('sec-fetch-mode') || '';
+
+  if (isPrefetchRequest(request)) return false;
+  if (isRSCRequest(request)) return false;
+
+  return (
+    secFetchDest === 'document' ||
+    secFetchMode === 'navigate' ||
+    accept.includes('text/html')
+  );
+}
+
+/**
+ * ตรวจ token กับ backend / api verify
  */
 async function verifyTokenWithBackend(token: string): Promise<boolean> {
   try {
     const response = await fetch(`${BACKEND_URL}/auth/verify`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({ token }),
+      cache: 'no-store',
     });
+
     return response.ok;
   } catch (error) {
     console.error('Middleware auth verification error:', error);
@@ -22,104 +79,182 @@ async function verifyTokenWithBackend(token: string): Promise<boolean> {
 }
 
 /**
- * ฟังก์ชันสำหรับล้าง Auth Cookies ทั้งหมด (Token & Role) 
- * และสั่ง Redirect ไปยังหน้าที่กำหนด เพื่อป้องกันไม่ให้เกิดสิทธิ์ค้าง
+ * ล้าง cookie token + role
+ * ถ้า redirectUrl เป็น path เดียวกับหน้าปัจจุบัน จะไม่ redirect ซ้ำ
+ * แต่จะ NextResponse.next() พร้อมล้าง cookie แทน
  */
 function createLogoutResponse(redirectUrl: string, request: NextRequest) {
-  const response = NextResponse.redirect(new URL(redirectUrl, request.url));
-  
-  // ล้างคุกกี้โดยการตั้งค่า maxAge เป็น 0
-  response.cookies.set('token', '', { maxAge: 0, path: '/' });
-  response.cookies.set('role', '', { maxAge: 0, path: '/' });
-  
+  const targetUrl = new URL(redirectUrl, request.url);
+
+  const response =
+    request.nextUrl.pathname === targetUrl.pathname
+      ? NextResponse.next()
+      : NextResponse.redirect(targetUrl);
+
+  response.cookies.set('token', '', {
+    maxAge: 0,
+    path: '/',
+  });
+
+  response.cookies.set('role', '', {
+    maxAge: 0,
+    path: '/',
+  });
+
   return response;
 }
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  
-  // 1. ปล่อยผ่าน API routes และไฟล์จำพวก static assets (ภาพ, ตัวหนังสือ) เสมอ
+
+  // ปล่อยผ่าน API routes และ static assets
   if (
-    pathname.startsWith('/api/') || 
-    pathname.startsWith('/_next/') || 
+    pathname.startsWith('/api/') ||
+    pathname.startsWith('/_next/') ||
     pathname.startsWith('/static/') ||
-    pathname.includes('.') // ปล่อยผ่านไฟล์เช่น favicon.ico, logo.png
+    pathname.includes('.')
   ) {
     return NextResponse.next();
   }
-  
-  // ดึงค่า token และ role จาก cookies
-  const token = request.cookies.get('token')?.value;
-  const role = request.cookies.get('role')?.value?.toLowerCase(); // แปลงเป็นตัวพิมพ์เล็กเพื่อความแม่นยำ
 
-  // เช็คประเภทของหน้าเว็บด้วยการเปรียบเทียบค่าตรงๆ (ป้องกันบั๊ก .startsWith('/') เหมารวมทั้งหมด)
-  const authPaths = ['/admin/login', '/admin/register', '/user/login', '/user/register'];
+  /**
+   * ดึง section แรกของ path
+   *
+   * /admin         => admin
+   * /admin/login   => admin
+   * /user          => user
+   * /user/login    => user
+   * /              => ''
+   */
+  const section = pathname.split('/').filter(Boolean)[0] || '';
+
+  const isAdminPath = section === 'admin';
+  const isUserPath = section === 'user';
+
+  const authPaths = [
+    '/admin/login',
+    '/admin/register',
+    '/user/login',
+    '/user/register',
+  ];
+
   const isAuthPage = authPaths.includes(pathname);
   const isLandingPage = pathname === '/';
   const isPublic = isAuthPage || isLandingPage;
-  
-  // =============================================
-  // เคสที่ 1: มี Token (ผู้ใช้ล็อกอินค้างไว้ในระบบ)
-  // =============================================
-  if (token) {
-    // ส่งไปตรวจความถูกต้องที่ฝั่ง Backend
-    const isValid = await verifyTokenWithBackend(token);
-    
-    // ถ้า Token หมดอายุ หรือเป็น Token ปลอม -> ล้างคุกกี้แล้วส่งไปหน้า Login ตามกลุ่มเซกชัน
-    if (!isValid) {
-      const loginPath = pathname.startsWith('/admin') ? '/admin/login' : '/user/login';
-      return createLogoutResponse(loginPath, request);
-    }
-    
-    // 🔥 [ดักการเข้าข้ามฝั่ง] USER ล็อกอินแล้ว แต่พยายามจะแอบเข้าหน้า ADMIN 
-    if (role === 'user' && pathname.startsWith('/admin')) {
-      // ทำลายสิทธิ์ยูสเซอร์เดิมทิ้ง แล้วบังคับเด้งไปหน้าล็อกอินแอดมิน เพื่อให้ใช้บัญชีแอดมินล็อกอินใหม่
-      return createLogoutResponse('/admin/login', request);
-    }
-    
-    // 🔥 [ดักการเข้าข้ามฝั่ง] ADMIN ล็อกอินแล้ว แต่พยายามจะแอบเข้าหน้า USER
-    if (role === 'admin' && pathname.startsWith('/user')) {
-      // ทำลายสิทธิ์แอดมินเดิมทิ้ง แล้วบังคับเด้งไปหน้าล็อกอินยูสเซอร์ เพื่อให้ใช้บัญชียูสเซอร์ล็อกอินใหม่
-      return createLogoutResponse('/user/login', request);
-    }
 
-    // [จัดการสิทธิ์หลงลืม] ล็อกอินแล้ว แต่อุตส่าห์ไปกดเข้าหน้าแรกเว็บ หรือหน้า Login ของตัวเอง
-    if (isPublic) {
-      if (role === 'admin') return NextResponse.redirect(new URL('/admin', request.url));
-      if (role === 'user') return NextResponse.redirect(new URL('/user', request.url));
-    }
+  const token = request.cookies.get('token')?.value;
 
-    // ถ้าผ่านเงื่อนไขด้านบนทั้งหมด แสดงว่าเข้าหน้าเว็บถูกตามสิทธิ์ของตัวเองแล้ว -> ปล่อยเข้าชมเว็บ
-    return NextResponse.next();
-  } 
-  
-  // =============================================
-  // เคสที่ 2: ไม่มี Token (ผู้ใช้ทั่วไปที่ยังไม่ได้ล็อกอิน)
-  // =============================================
-  else {
-    // ถ้าตั้งใจเข้าหน้าทั่วไป (หน้าแรก, หน้าล็อกอิน, หน้าสมัครสมาชิก) -> ปล่อยผ่านปกติ ห้าม Redirect วนลูป
+  const role = request.cookies
+    .get('role')
+    ?.value
+    ?.toLowerCase() as UserRole | undefined;
+
+  const isRealPage = isRealPageNavigation(request);
+
+
+  // =========================================
+  // CASE 1: ไม่มี token
+  // =========================================
+  if (!token) {
+    // หน้า public เข้าได้
     if (isPublic) {
       return NextResponse.next();
     }
-    
-    // ถ้าไม่มี Token แต่ดันพยายามพิมพ์ URL เข้าหน้าภายใน (Dashboard) ตรงๆ 
-    // -> ดีดกลับไปหน้าล็อกอินของฝั่งนั้นๆ
-    if (pathname.startsWith('/admin')) {
+
+    // ไม่มี token แล้วเข้า admin
+    if (isAdminPath) {
       return NextResponse.redirect(new URL('/admin/login', request.url));
-    } else if (pathname.startsWith('/user')) {
+    }
+
+    // ไม่มี token แล้วเข้า user
+    if (isUserPath) {
       return NextResponse.redirect(new URL('/user/login', request.url));
     }
+
+    return NextResponse.next();
   }
+
+  // =========================================
+  // CASE 2: มี token
+  // =========================================
+
+  const isValid = await verifyTokenWithBackend(token);
+
+   console.log('middleware debug:', {
+    url: request.url,
+    pathname,
+    section,
+    role,
+    hasToken: Boolean(token),
+    isAdminPath,
+    isUserPath,
+    isAuthPage,
+    isPublic,
+    isRealPage,
+    prefetch: isPrefetchRequest(request),
+    rsc: isRSCRequest(request),
+    secFetchDest: request.headers.get('sec-fetch-dest'),
+    secFetchMode: request.headers.get('sec-fetch-mode'),
+    accept: request.headers.get('accept'),
+  });
   
-  // สำรองเผื่อกรณีหลุดรอดเงื่อนไขทั้งหมด
+  console.log(isValid);
+  // token หมดอายุ / token ปลอม
+  if (!isValid) {
+    const loginPath = isAdminPath ? '/admin/login' : '/user/login';
+    return createLogoutResponse(loginPath, request);
+  }
+
+   
+
+  // role แปลก / role หาย
+  if (role !== 'admin' && role !== 'user') {
+    const loginPath = isAdminPath ? '/admin/login' : '/user/login';
+    return createLogoutResponse(loginPath, request);
+  }
+
+  // =========================================
+  // ดักเข้าข้ามฝั่ง ตามหลักการที่ต้องการ
+  //
+  // ADMIN เข้า /user จริง ๆ  => logout => /user/login
+  // USER เข้า /admin จริง ๆ  => logout => /admin/login
+  //
+  // แต่ถ้าเป็น prefetch / RSC / request แอบยิง
+  // จะ block 403 เฉย ๆ และไม่ล้าง cookie
+  // =========================================
+
+  if (role === 'admin' && isUserPath) {
+    if (isRealPage) {
+      return createLogoutResponse('/user/login', request);
+    }
+
+    return new NextResponse(null, { status: 403 });
+  }
+
+  if (role === 'user' && isAdminPath) {
+    if (isRealPage) {
+      return createLogoutResponse('/admin/login', request);
+    }
+
+    return new NextResponse(null, { status: 403 });
+  }
+
+  // =========================================
+  // login แล้ว แต่กลับไปหน้า public / login / register
+  // =========================================
+  if (isPublic) {
+    if (role === 'admin') {
+      return NextResponse.redirect(new URL('/admin', request.url));
+    }
+
+    if (role === 'user') {
+      return NextResponse.redirect(new URL('/user', request.url));
+    }
+  }
+
   return NextResponse.next();
 }
 
-// กำหนดขอบเขตให้ Middleware ทำงานเฉพาะหน้าที่เราต้องการเช็คสิทธิ์ (ลดภาระการทำงานของเซิร์ฟเวอร์)
 export const config = {
-  matcher: [
-    '/',
-    '/admin/:path*',
-    '/user/:path*',
-  ],
+  matcher: ['/', '/admin/:path*', '/user/:path*'],
 };

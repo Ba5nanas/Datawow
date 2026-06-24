@@ -49,7 +49,7 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3001
-      - LANDINGPAGE_URL=http://locahost:5001
+      - NEXT_PUBLIC_LANDINGPAGE_URL=http://localhost:5001
       - BACKEND_URL=http://backend:3000
     depends_on:
       - backend
