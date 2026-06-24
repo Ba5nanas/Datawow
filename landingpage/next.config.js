@@ -1,6 +1,4 @@
-{
-  "extends": "next/tsconfig.json",
-  "compilerOptions": {
-    "baseUrl": "."
-  }
-}
+/** @type {import('next').NextConfig} */
+const nextConfig = {};
+
+module.exports = nextConfig;
