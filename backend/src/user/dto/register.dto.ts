@@ -1,0 +1,17 @@
+import { IsString, IsEmail, IsEnum, MinLength } from 'class-validator';
+import { Role } from '../../common/enums/role.enum';
+
+export class RegisterDto {
+  @IsString()
+  fullName: string;
+
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  @MinLength(6)
+  password: string;
+
+  @IsEnum(Role)
+  role: Role;
+}
